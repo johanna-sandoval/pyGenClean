@@ -747,8 +747,6 @@ long_desc = None
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument("-v", "--version", action="version",
                     version="pyGenClean version {}".format(__version__))
-
-
 # The INPUT files
 group = parser.add_argument_group("Input File")
 group.add_argument("--mds", type=str, metavar="FILE", required=True,

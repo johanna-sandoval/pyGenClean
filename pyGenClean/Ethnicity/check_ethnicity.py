@@ -1,5 +1,4 @@
 #!/usr/bin/env python2.7
-
 # This file is part of pyGenClean.
 #
 # pyGenClean is free software: you can redistribute it and/or modify it under
@@ -22,6 +21,7 @@ import argparse
 import subprocess
 from itertools import izip
 from collections import defaultdict
+from multiprocessing import Pool
 
 from ..PlinkUtils import plot_MDS as PlotMDS
 from ..PlinkUtils import createRowFromPlinkSpacedOutput
@@ -525,6 +525,12 @@ def runRelatedness(inputPrefix, outPrefix, options):
             new_options += ["--sge-walltime", options.ibs_sge_walltime]
         if options.ibs_sge_nodes is not None:
             new_options += ["--sge-nodes"] + map(str, options.ibs_sge_nodes)
+    if options.parallel:
+        new_options.append("--parallel")
+        new_options += ["--line-per-file-for-sge",
+                        str(options.line_per_file_for_sge)]
+        if options.ibs_parallel_procs is not None:
+            new_options += ["--parallel-procs", str(options.ibs_parallel_procs)]
 
     # Checking the input file
     if not allFileExists([inputPrefix + i for i in [".bed", ".bim", ".fam"]]):
@@ -962,6 +968,9 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
         # Initializing a session
         s = drmaa.Session()
         s.initialize()
+    elif options.parallel:
+        pool = Pool(processes=options.parallel_procs)
+        results = []
 
     zipped = izip(popNames, referencePrefixes, snpToExtractFileNames)
     for popName, refPrefix, snpToExtractFileName in zipped:
@@ -993,7 +1002,12 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
             # Storing the job template and the job ID
             jobTemplates.append(jt)
             jobIDs.append(jobID)
-
+        elif options.parallel:
+            # Parallelization usin multiprocessing Pool
+            results.append(pool.apply_async(runCommand,
+                                            (plinkCommand,)
+                                            )
+                           )
         else:
             # We run normal
             runCommand(plinkCommand)
@@ -1016,6 +1030,21 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
         for hadProblem in hadProblems:
             if not hadProblem:
                 msg = "Some SGE jobs had errors..."
+                raise ProgramError(msg)
+    elif options.parallel:
+        # Closing the session
+        pool.close()
+        # Waiting for the jobs to finish
+        pool.join()
+        hadProblems = []
+        for result in results:
+            retVal = result.successful()
+            hadProblems.append(retVal is True)
+        # Checking for problems
+        for hadProblem in hadProblems:
+            if not hadProblem:
+                msg = "Some parallel jobs had errors..."
+                print(msg)
                 raise ProgramError(msg)
 
 
@@ -1159,6 +1188,10 @@ def parseArgs(argString=None):  # pragma: no cover
                                 int    processor per nodes) (for IBS).
     ``--line-per-file-for-sge`` int    The number of line per file for SGE task
                                        array.
+    ``--parallel``              bool   Use multiprocessing for parallelization.
+    ``--parallel-procs``        int    Number of processor for parallelization.
+    ``--ibs-parallel-procs``    int    Number of processor for parallelization
+                                int    (for IBS).
     ``--nb-components``         int    The number of component to compute.
     ``--outliers-of``           string Finds the ouliers of this population.
     ``--multiplier``            float  To find the outliers, we look for more
@@ -1270,6 +1303,11 @@ group.add_argument("--sge-nodes", type=int, metavar="INT", nargs=2,
                          " the number of processor to use. Do not use if you "
                          "are not required to specify the number of nodes for "
                          "your jobs on the cluster."))
+group.add_argument("--parallel", action="store_true",
+                   help="Use multiprocessing for parallelization.")
+group.add_argument("--parallel-procs", type=int, metavar="INT",
+                   help=("The number of processors per node to use for"
+                        "multiprocessing paralelization"))
 group.add_argument("--ibs-sge-walltime", type=str, metavar="TIME",
                    help=("The walltime for the IBS jobs to run on the "
                          "cluster. Do not use if you are not required to "
@@ -1282,6 +1320,9 @@ group.add_argument("--ibs-sge-nodes", type=int, metavar="INT", nargs=2,
                          "number of nodes and Y is the number of processor to "
                          "use. Do not use if you are not required to specify "
                          "the number of nodes for your jobs on the cluster."))
+group.add_argument("--ibs-parallel-procs", type=int, metavar="INT",
+                   help=("The number of processor per nodes to use for the IBS"
+                         "parallelization"))
 group.add_argument("--line-per-file-for-sge", type=int, metavar="INT",
                    default=100, help=("The number of line per file for SGE "
                                       "task array for the IBS jobs. [default: "

@@ -22,7 +22,7 @@ import gzip
 import logging
 import argparse
 import subprocess
-from collections import defaultdict
+from multiprocessing import Pool
 
 import numpy as np
 
@@ -483,17 +483,19 @@ def runGenome(bfile, options):
 
     :returns: the name of the ``genome`` file.
 
-    Runs Plink with the ``genome`` option. If the user asks for SGE
-    (``options.sge`` is True), a frequency file is first created by plink.
+    Runs Plink with the ``genome`` option. If the user asks for SGE or parallel
+    multiprocessing (``options.sge`` or``options.parallel``is True),
+    a frequency file is first created by plink.
     Then, the input files are split in ``options.line_per_file_for_sge`` and
     Plink is called (using the ``genome`` option) on the cluster using SGE
-    (:py:func:`runGenomeSGE`). After the analysis, Plink's output files and
-    logs are merged using :py:func:`mergeGenomeLogFiles`.
+    (:py:func:`runGenomeSGE`) or multiprocessing(:py:func:`runGenomeParallel`).
+    After the analysis, Plink's output files and logs are merged using
+    :py:func:`mergeGenomeLogFiles`.
 
     """
     outPrefix = options.out + ".genome"
-    if options.sge:
-        # We run genome using SGE
+    if options.sge or options.parallel:
+        # We run genome using SGE or multiprocessing
         # We need to create a frequency file using plink
         plinkCommand = ["plink", "--noweb", "--bfile", bfile, "--freq",
                         "--out", options.out + ".frequency"]
@@ -502,9 +504,12 @@ def runGenome(bfile, options):
         # We need to split the .fam file
         nbJob = splitFile(bfile + ".fam", options.line_per_file_for_sge,
                           outPrefix)
-
-        runGenomeSGE(bfile, options.out + ".frequency.frq", nbJob,
-                     outPrefix, options)
+        if options.sge:
+            runGenomeSGE(bfile, options.out + ".frequency.frq", nbJob,
+                         outPrefix, options)
+        else:
+            runGenomeParallel(bfile, options.out + ".frequency.frq", nbJob,
+                              outPrefix, options)
 
         # Merging genome files
         mergeGenomeLogFiles(outPrefix, nbJob)
@@ -694,6 +699,60 @@ def runGenomeSGE(bfile, freqFile, nbJob, outPrefix, options):
             raise ProgramError(msg)
 
 
+def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
+    """Runs the genome command from plink, using multiprocessing.
+
+    :param bfile: the prefix of the input file.
+    :param freqFile: the name of the frequency file (from Plink).
+    :param nbJob: the number of jobs to launch.
+    :param outPrefix: the prefix of all the output files.
+    :param options: the options.
+
+    :type bfile: str
+    :type freqFile: str
+    :type nbJob: int
+    :type outPrefix: str
+    :type options: argparse.Namespace
+
+    Runs Plink with the ``genome`` options on the cluster
+    (using multiprocessing).
+
+    """
+    # Callback function
+    # Initialize workers
+    pool = Pool(processes=options.parallel_procs)
+    results = []
+    # Run for each sub task
+    for i in xrange(1, nbJob + 1):
+        for j in xrange(i, nbJob + 1):
+            # The command to run
+            plinkCommand = ["plink", "--noweb", "--bfile", bfile,
+                            "--read-freq", freqFile, "--genome",
+                            "--genome-full", "--genome-lists",
+                            "{}_tmp.list{}".format(outPrefix, i),
+                            "{}_tmp.list{}".format(outPrefix, j), "--out",
+                            "{}_output.sub.{}.{}".format(outPrefix, i, j)]
+            # Run the command
+            results.append(pool.apply_async(runCommand,
+                                            (plinkCommand,)
+                                            )
+                           )
+    # Closing the session
+    pool.close()
+    # Waiting for the jobs to finish
+    pool.join()
+    hadProblems = []
+    for result in results:
+        retVal = result.successful()
+        hadProblems.append(retVal is True)
+    # Checking for problems
+    for hadProblem in hadProblems:
+        if not hadProblem:
+            msg = "Some parallel jobs had errors..."
+            print(msg)
+            raise ProgramError(msg)
+
+
 def extractSNPs(snpsToExtract, options):
     """Extract markers using Plink.
 
@@ -865,6 +924,8 @@ def parseArgs(argString=None):  # pragma: no cover
                                 int    processor per nodes).
     ``--line-per-file-for-sge`` int    The number of line per file for SGE task
                                        array.
+    ``--parallel``              bool   Parallelization using multiprocessing.
+    ``--parallel-procs``        int    Number of procesors for psarallelization
     ``--out``                   string The prefix of the output files.
     =========================== ====== ========================================
 
@@ -960,6 +1021,11 @@ group.add_argument("--sge-nodes", type=int, metavar="INT", nargs=2,
 group.add_argument("--line-per-file-for-sge", type=int, metavar="INT",
                    default=100, help=("The number of line per file for SGE "
                                       "task array. [default: " "%(default)d]"))
+# Multiprocess arguments
+group.add_argument("--parallel", action="store_true",
+                   help=("Use multiprocessing for parallelization."))
+group.add_argument("--parallel-procs", type=int, metavar="INT",
+                   help=("The number of processors to use."))
 # The OUTPUT files
 group = parser.add_argument_group("Output File")
 group.add_argument("--out", type=str, metavar="FILE", default="ibs",
