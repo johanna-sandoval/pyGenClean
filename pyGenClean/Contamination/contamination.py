@@ -22,6 +22,7 @@ import pipes
 import logging
 import argparse
 import subprocess
+from multiprocessing import Pool
 
 from .. import __version__
 
@@ -68,6 +69,11 @@ def main(argString=None):
     if args.sge:
         run_bafRegress_sge(sample_files, args.out, args.out + ".to_extract",
                            args.out + ".frq", args)
+    elif args.parallel:
+        run_bafRegress_parallel(sample_files, args.out,
+                                args.out + ".to_extract",
+                                args.out + ".frq", args
+                                )
     else:
         run_bafRegress(sample_files, args.out, args.out + ".to_extract",
                        args.out + ".frq", args)
@@ -332,6 +338,133 @@ def run_bafRegress_sge(filenames, out_prefix, extract_filename, freq_filename,
     o_file.close()
 
 
+def run_command(command):
+    """Run a command.
+
+    :param command: the command to run.
+
+    :type command: list
+
+    Tries to run a command. If it fails, raise a :py:class:`ProgramError`. This
+    function uses the :py:mod:`subprocess` module.
+
+    .. warning::
+        The variable ``command`` should be a list of strings (no other type).
+
+    """
+    output = None
+    try:
+        output = subprocess.check_output(command,
+                                         stderr=subprocess.STDOUT, shell=False)
+    except subprocess.CalledProcessError:
+        msg = "couldn't run command\n" + " ".join(command)
+        raise ProgramError(msg)
+
+
+def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
+                            freq_filename, options):
+    """Runs the bafRegress function using multiprocessing.
+
+    :param filenames: the set of all sample files.
+    :param out_prefix: the output prefix.
+    :param extract_filename: the name of the markers to extract.
+    :param freq_filename: the name of the file containing the frequency.
+    :param options: the other options.
+
+    :type filenames: set
+    :type out_prefix: str
+    :type extract_filename: str
+    :type freq_filename: str
+    :type options: argparse.Namespace
+
+    """
+    # Initialize workers
+    pool = Pool(processes=options.parallel_procs)
+    results = []
+
+    # The base command
+    base_command = [
+        "bafRegress.py",
+        "estimate",
+        "--freqfile", freq_filename,
+        "--freqcol", "2,5",
+        "--extract", extract_filename,
+        "--colsample", options.colsample,
+        "--colmarker", options.colmarker,
+        "--colbaf", options.colbaf,
+        "--colab1", options.colab1,
+        "--colab2", options.colab2,
+    ]
+
+    # Creating chunks
+    chunks = [
+        list(filenames)[i: i+options.sample_per_run_for_sge]
+        for i in range(0, len(filenames), options.sample_per_run_for_sge)
+    ]
+
+    # Run for each sub task
+    results = []
+    for i, chunk in enumerate(chunks):
+        # Creating the final command
+        command = [pipes.quote(token) for token in base_command + chunk]
+        command.append(
+            "> {}.bafRegress_{}".format(pipes.quote(out_prefix), i+1),
+        )
+        command = " ".join(command)
+
+        # Run the command
+        results.append(pool.apply_async(run_command,
+                                        args=(command,)
+                                        )
+                       )
+    # Closing the session
+    pool.close()
+    # Waiting for the jobs to finish
+    pool.join()
+    # Report if had problems
+    had_problems = []
+    for result in results:
+        retVal = result.successful()
+        hadProblems.append(retVal is True)
+
+    # Checking for problems
+    if not all(had_problems):
+        raise ProgramError("Some parallel jobs had errors...")
+
+    # Merging the output files
+    o_file = None
+    try:
+        o_file = open(out_prefix + ".bafRegress", "w")
+    except IOError:
+        msg = "{}: cannot write file".format(out_prefix + ".bafRegress")
+        raise ProgramError(msg)
+
+    to_remove = set()
+    for i in range(len(chunks)):
+        filename = out_prefix + ".bafRegress_{}".format(i+1)
+        if not os.path.isfile(filename):
+            raise ProgramError("{}: no such file".format(filename))
+        to_remove.add(filename)
+
+        with open(filename, "r") as i_file:
+            if i == 0:
+                # First file, we write everything
+                o_file.write(i_file.read())
+                continue
+
+            for j, line in enumerate(i_file):
+                # Skipping first line
+                if j == 0:
+                    continue
+                o_file.write(line)
+
+    for filename in to_remove:
+        # Deleting the chunk
+        os.remove(filename)
+
+    # Closing
+    o_file.close()
+
 def run_plink(in_prefix, out_prefix, extract_filename):
     """Runs Plink with the geno option.
 
@@ -433,6 +566,8 @@ def parseArgs(argString=None):  # pragma: no cover
                                         cluster.
     ``--sample-per-run-for-sge`` int    The number of sample to run for a
                                         single SGE job.
+    ``--parallel``               bool   Use multiprocessing for parallelization
+    ``--parallel-procs``         int    The number of processors to use
     ============================ ====== =======================================
 
     .. note::
@@ -529,6 +664,12 @@ group.add_argument("--sample-per-run-for-sge", type=int, metavar="INT",
                    default=30,
                    help=("The number of sample to run for a single SGE job. "
                          "[default: %(default)d]"))
+group = parser.add_argument_group("Parallel Options")
+group.add_argument("--parallel", action="store_true",
+                   help="Use SGE for parallelization.")
+group.add_argument("--parallel-procs", type=int, metavar="INT",
+                   help=("The number of processor to use in parallel "
+                         "multiprocessing mode"))
 
 # The OUTPUT files
 group = parser.add_argument_group("Output File")

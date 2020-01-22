@@ -22,7 +22,8 @@ import gzip
 import logging
 import argparse
 import subprocess
-from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool as Pool
+
 
 import numpy as np
 
@@ -734,7 +735,7 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
                             "{}_output.sub.{}.{}".format(outPrefix, i, j)]
             # Run the command
             results.append(pool.apply_async(runCommand,
-                                            (plinkCommand,)
+                                            args=plinkCommand
                                             )
                            )
     # Closing the session

@@ -530,7 +530,8 @@ def runRelatedness(inputPrefix, outPrefix, options):
         new_options += ["--line-per-file-for-sge",
                         str(options.line_per_file_for_sge)]
         if options.ibs_parallel_procs is not None:
-            new_options += ["--parallel-procs", str(options.ibs_parallel_procs)]
+            new_options += ["--parallel-procs", 
+            str(options.ibs_parallel_procs)]
 
     # Checking the input file
     if not allFileExists([inputPrefix + i for i in [".bed", ".bim", ".fam"]]):
@@ -1005,7 +1006,7 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
         elif options.parallel:
             # Parallelization usin multiprocessing Pool
             results.append(pool.apply_async(runCommand,
-                                            (plinkCommand,)
+                                            args=(plinkCommand,)
                                             )
                            )
         else:
@@ -1306,8 +1307,8 @@ group.add_argument("--sge-nodes", type=int, metavar="INT", nargs=2,
 group.add_argument("--parallel", action="store_true",
                    help="Use multiprocessing for parallelization.")
 group.add_argument("--parallel-procs", type=int, metavar="INT",
-                   help=("The number of processors per node to use for"
-                        "multiprocessing paralelization"))
+                   help=("The number of processors per node to use for "
+                         "multiprocessing paralelization."))
 group.add_argument("--ibs-sge-walltime", type=str, metavar="TIME",
                    help=("The walltime for the IBS jobs to run on the "
                          "cluster. Do not use if you are not required to "
