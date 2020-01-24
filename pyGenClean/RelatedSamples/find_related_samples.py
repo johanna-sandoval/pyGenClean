@@ -751,7 +751,7 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
         if not hadProblem:
             msg = "Some parallel jobs had errors..."
             print(msg)
-            raise ProgramError(msg)
+            #raise ProgramError(msg)
 
 
 def extractSNPs(snpsToExtract, options):
