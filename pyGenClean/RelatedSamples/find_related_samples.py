@@ -840,8 +840,8 @@ def runCommand(command):
         raise ProgramError(msg)
 
 def runCommandWrapped(command):
-        """Run a command. Wrapper used to overcome an error
-        TypeError: ('__init__() takes at least 3 arguments (1 given)',
+    """Run a command. Wrapper used to overcome an error
+      TypeError: ('__init__() takes at least 3 arguments (1 given)',
          <class 'subprocess.CalledProcessError'>, ())
 
     :param command: the command to run.
