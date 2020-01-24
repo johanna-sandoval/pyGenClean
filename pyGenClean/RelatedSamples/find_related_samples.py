@@ -22,7 +22,7 @@ import gzip
 import logging
 import argparse
 import subprocess
-from multiprocessing.pool import ThreadPool as Pool
+from multiprocessing.pool import Pool
 
 
 import numpy as np
@@ -734,7 +734,7 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
                             "{}_tmp.list{}".format(outPrefix, j), "--out",
                             "{}_output.sub.{}.{}".format(outPrefix, i, j)]
             # Run the command
-            results.append(pool.apply_async(runCommand,
+            results.append(pool.apply_async(runCommandWrapped,
                                             args=plinkCommand
                                             )
                            )
@@ -838,6 +838,27 @@ def runCommand(command):
     except subprocess.CalledProcessError:
         msg = "couldn't run command\n" + " ".join(command)
         raise ProgramError(msg)
+
+def runCommandWrapped(command):
+        """Run a command. Wrapper used to overcome an error
+        TypeError: ('__init__() takes at least 3 arguments (1 given)',
+         <class 'subprocess.CalledProcessError'>, ())
+
+    :param command: the command to run.
+
+    :type command: list
+
+    Tries to run a command. If it fails, print the traceback is printed
+
+    .. warning::
+        The variable ``command`` should be a list of strings (no other type).
+
+    """
+
+    try:
+        runCommand(command)
+    except:
+        print('%s: %s' % (command, traceback.format_exc()))
 
 
 def checkArgs(args):
