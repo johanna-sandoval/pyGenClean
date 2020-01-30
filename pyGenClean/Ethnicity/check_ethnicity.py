@@ -22,6 +22,7 @@ import subprocess
 from itertools import izip
 from collections import defaultdict
 from multiprocessing import Pool
+import traceback
 
 from ..PlinkUtils import plot_MDS as PlotMDS
 from ..PlinkUtils import createRowFromPlinkSpacedOutput
@@ -1005,7 +1006,7 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
             jobIDs.append(jobID)
         elif options.parallel:
             # Parallelization usin multiprocessing Pool
-            results.append(pool.apply_async(runCommand,
+            results.append(pool.apply_async(runCommandWrapped,
                                             args=(plinkCommand,)
                                             )
                            )
@@ -1047,6 +1048,31 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
                 msg = "Some parallel jobs had errors..."
                 print(msg)
                 raise ProgramError(msg)
+
+
+def runCommandWrapped(command):
+    """Run a command. Wrapper used to overcome an error:
+    TypeError: ('__init__() takes at least 3 arguments (1 given)',
+    <class 'subprocess.CalledProcessError'>, ())
+
+    :param command: the command to run.
+
+    :type command: list
+
+    Tries to run a command. If it fails, raise a :py:class:`ProgramError`. This
+    function uses the :py:mod:`subprocess` module.
+
+    .. warning::
+        The variable ``command`` should be a list of strings (no other type).
+
+    """
+
+    try:
+        runCommand(command)
+        return True
+    except:
+        print('%s: %s' % (command, traceback.format_exc()))
+        return False
 
 
 def runCommand(command):

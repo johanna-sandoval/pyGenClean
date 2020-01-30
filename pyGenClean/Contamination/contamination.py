@@ -23,6 +23,7 @@ import logging
 import argparse
 import subprocess
 from multiprocessing import Pool
+import traceback
 
 from .. import __version__
 
@@ -338,7 +339,31 @@ def run_bafRegress_sge(filenames, out_prefix, extract_filename, freq_filename,
     o_file.close()
 
 
-def run_command(command):
+def runCommandWrapped(command):
+    """Run a command. Wrapper used to overcome an error:
+    TypeError: ('__init__() takes at least 3 arguments (1 given)',
+    <class 'subprocess.CalledProcessError'>, ())
+
+    :param command: the command to run.
+
+    :type command: list
+
+    Tries to run a command. If it fails, raise a :py:class:`ProgramError`. This
+    function uses the :py:mod:`subprocess` module.
+
+    .. warning::
+        The variable ``command`` should be a list of strings (no other type).
+
+    """    
+    try:
+        runCommand(command)
+        return True
+    except:
+        print('%s: %s' % (command, traceback.format_exc()))
+        return False
+
+
+def runCommand(command):
     """Run a command.
 
     :param command: the command to run.
@@ -354,8 +379,11 @@ def run_command(command):
     """
     output = None
     try:
-        output = subprocess.check_output(command,
-                                         stderr=subprocess.STDOUT, shell=False)
+        output = subprocess.check_output(
+            command,
+            stderr=subprocess.STDOUT,
+            shell=False,
+        )
     except subprocess.CalledProcessError:
         msg = "couldn't run command\n" + " ".join(command)
         raise ProgramError(msg)
@@ -413,7 +441,7 @@ def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
         command = " ".join(command)
 
         # Run the command
-        results.append(pool.apply_async(run_command,
+        results.append(pool.apply_async(runCommandWrapped,
                                         args=(command,)
                                         )
                        )
@@ -425,7 +453,7 @@ def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
     had_problems = []
     for result in results:
         retVal = result.successful()
-        hadProblems.append(retVal is True)
+        had_problems.append(retVal is True)
 
     # Checking for problems
     if not all(had_problems):
@@ -464,6 +492,7 @@ def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
 
     # Closing
     o_file.close()
+
 
 def run_plink(in_prefix, out_prefix, extract_filename):
     """Runs Plink with the geno option.
@@ -666,7 +695,7 @@ group.add_argument("--sample-per-run-for-sge", type=int, metavar="INT",
                          "[default: %(default)d]"))
 group = parser.add_argument_group("Parallel Options")
 group.add_argument("--parallel", action="store_true",
-                   help="Use SGE for parallelization.")
+                   help="Use multiprocessing for parallelization.")
 group.add_argument("--parallel-procs", type=int, metavar="INT",
                    help=("The number of processor to use in parallel "
                          "multiprocessing mode"))

@@ -23,7 +23,7 @@ import logging
 import argparse
 import subprocess
 from multiprocessing.pool import Pool
-
+import traceback
 
 import numpy as np
 
@@ -735,7 +735,7 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
                             "{}_output.sub.{}.{}".format(outPrefix, i, j)]
             # Run the command
             results.append(pool.apply_async(runCommandWrapped,
-                                            args=plinkCommand
+                                            args=(plinkCommand,)
                                             )
                            )
     # Closing the session
@@ -751,7 +751,7 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
         if not hadProblem:
             msg = "Some parallel jobs had errors..."
             print(msg)
-            #raise ProgramError(msg)
+            raise ProgramError(msg)
 
 
 def extractSNPs(snpsToExtract, options):
@@ -840,15 +840,16 @@ def runCommand(command):
         raise ProgramError(msg)
 
 def runCommandWrapped(command):
-    """Run a command. Wrapper used to overcome an error
-      TypeError: ('__init__() takes at least 3 arguments (1 given)',
-         <class 'subprocess.CalledProcessError'>, ())
+    """Run a command. Wrapper used to overcome an error:
+    TypeError: ('__init__() takes at least 3 arguments (1 given)',
+    <class 'subprocess.CalledProcessError'>, ())
 
     :param command: the command to run.
 
     :type command: list
 
-    Tries to run a command. If it fails, print the traceback is printed
+    Tries to run a command. If it fails, raise a :py:class:`ProgramError`. This
+    function uses the :py:mod:`subprocess` module.
 
     .. warning::
         The variable ``command`` should be a list of strings (no other type).
@@ -857,8 +858,10 @@ def runCommandWrapped(command):
 
     try:
         runCommand(command)
+        return True
     except:
         print('%s: %s' % (command, traceback.format_exc()))
+        return False
 
 
 def checkArgs(args):
