@@ -532,7 +532,8 @@ def runRelatedness(inputPrefix, outPrefix, options):
                         str(options.line_per_file_for_sge)]
         if options.ibs_parallel_procs is not None:
             new_options += ["--parallel-procs", 
-            str(options.ibs_parallel_procs)]
+                            str(options.ibs_parallel_procs)
+                            ]
 
     # Checking the input file
     if not allFileExists([inputPrefix + i for i in [".bed", ".bim", ".fam"]]):
@@ -1068,7 +1069,10 @@ def runCommandWrapped(command):
     """
 
     try:
-        output = subprocess.call(command, shell=False)
+        output = subprocess.call(command, 
+                                  stderr=subprocess.STDOUT,
+                                  shell=False
+                                )
         return True
     except:
         print('%s: %s' % (command, traceback.format_exc()))
