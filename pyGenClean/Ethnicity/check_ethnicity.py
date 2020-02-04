@@ -1040,7 +1040,7 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
         pool.join()
         hadProblems = []
         for result in results:
-            retVal = result.successful()
+            retVal = result.get()
             hadProblems.append(retVal is True)
         # Checking for problems
         for hadProblem in hadProblems:
@@ -1068,12 +1068,11 @@ def runCommandWrapped(command):
     """
 
     try:
-        runCommand(command)
+        output = subprocess.call(command, shell=False)
         return True
     except:
         print('%s: %s' % (command, traceback.format_exc()))
         return False
-
 
 def runCommand(command):
     """Run a command.

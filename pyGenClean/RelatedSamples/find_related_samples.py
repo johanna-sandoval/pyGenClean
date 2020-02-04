@@ -744,14 +744,14 @@ def runGenomeParallel(bfile, freqFile, nbJob, outPrefix, options):
     pool.join()
     hadProblems = []
     for result in results:
-        retVal = result.successful()
+        retVal = result.get()
         hadProblems.append(retVal is True)
     # Checking for problems
     for hadProblem in hadProblems:
         if not hadProblem:
             msg = "Some parallel jobs had errors..."
             print(msg)
-            raise ProgramError(msg)
+            #raise ProgramError(msg)
 
 
 def extractSNPs(snpsToExtract, options):
@@ -857,7 +857,8 @@ def runCommandWrapped(command):
     """
 
     try:
-        runCommand(command)
+        output = subprocess.call(command,
+                                         stderr=subprocess.STDOUT, shell=False)
         return True
     except:
         print('%s: %s' % (command, traceback.format_exc()))

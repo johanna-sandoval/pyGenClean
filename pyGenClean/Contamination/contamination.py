@@ -339,7 +339,7 @@ def run_bafRegress_sge(filenames, out_prefix, extract_filename, freq_filename,
     o_file.close()
 
 
-def runCommandWrapped(command):
+def runCommandWrapped(command, output):
     """Run a command. Wrapper used to overcome an error:
     TypeError: ('__init__() takes at least 3 arguments (1 given)',
     <class 'subprocess.CalledProcessError'>, ())
@@ -356,7 +356,10 @@ def runCommandWrapped(command):
 
     """    
     try:
-        runCommand(command)
+        f = open(output, 'w')
+        p = subprocess.call(command, stdout=f,
+                            stderr=subprocess.STDOUT,
+                            shell=False)
         return True
     except:
         print('%s: %s' % (command, traceback.format_exc()))
@@ -434,15 +437,16 @@ def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
     results = []
     for i, chunk in enumerate(chunks):
         # Creating the final command
-        command = [pipes.quote(token) for token in base_command + chunk]
-        command.append(
-            "> {}.bafRegress_{}".format(pipes.quote(out_prefix), i+1),
-        )
-        command = " ".join(command)
-
+        #command = [pipes.quote(token) for token in base_command + chunk]
+        #command.append(
+        #    "> {}.bafRegress_{}".format(pipes.quote(out_prefix), i+1),
+        #)
+        #command = " ".join(command)
+        command = [token for token in base_command + chunk]
+        output = "{}.bafRegress_{}".format(pipes.quote(out_prefix), i+1)
         # Run the command
         results.append(pool.apply_async(runCommandWrapped,
-                                        args=(command,)
+                                        args=(command, output)
                                         )
                        )
     # Closing the session
@@ -452,7 +456,7 @@ def run_bafRegress_parallel(filenames, out_prefix, extract_filename,
     # Report if had problems
     had_problems = []
     for result in results:
-        retVal = result.successful()
+        retVal = result.get()
         had_problems.append(retVal is True)
 
     # Checking for problems

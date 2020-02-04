@@ -67,7 +67,7 @@ def main(argString=None):
 
         # Reading the intensity file
         data = read_intensities(args.intensities, marker_names_chr,
-                                sample_names_gender, sex_problems)
+                                sample_names_gender, sex_problems, args)
 
     else:
         data = read_summarized_intensities(args.summarized_intensities)
@@ -504,19 +504,20 @@ def read_summarized_intensities(prefix):
 
 
 def read_intensities(file_name, needed_markers_chr, needed_samples_gender,
-                     sex_problems):
+                     sex_problems, options):
     """Reads the intensities from a file.
 
     :param file_name: the name of the input file.
     :param needed_markers_chr: the markers that are needed.
     :param needed_samples_gender: the gender of all the samples.
     :param sex_problems: the sample with sex problem.
+    :param options : additional arguments to extract SNP ID, Sample ID and Chr
 
     :type file_name: str
     :type needed_markers_chr: dict
     :type needed_samples_gender: dict
     :type sex_problems: frozenset
-
+    :type options: ArgumentParser
     :returns: a :py:class`numpy.recarray` containing the following columns (for
               each of the samples): ``sampleID``, ``chr23``, ``chr24``,
               ``gender`` and ``status``.
@@ -561,16 +562,18 @@ def read_intensities(file_name, needed_markers_chr, needed_samples_gender,
                 (col_name, i) for i, col_name in enumerate(row)
             ])
             # Check the column names
-            for col_name in {"SNP Name", "Sample ID", "X", "Y", "Chr"}:
+            for col_name in {options.col_snpID, options.col_sampleID, 
+                             "X", "Y", options.col_chr
+                             }:
                 if col_name not in header_index:
                     msg = "{}: no column named {}".format(file_name, col_name)
                     raise ProgramError(msg)
         else:
             # This is the data
             # Check if we want this sample and this marker
-            sampleID = row[header_index["Sample ID"]]
-            markerID = row[header_index["SNP Name"]]
-            chromosome = encode_chr(row[header_index["Chr"]])
+            sampleID = row[header_index[options.col_sampleID]]
+            markerID = row[header_index[options.col_snpID]]
+            chromosome = encode_chr(row[header_index[options.col_chr]])
             if chromosome not in {23, 24}:
                 # Not good chromsoome
                 continue
@@ -758,6 +761,7 @@ class ProgramError(Exception):
     def __str__(self):
         return self.message
 
+
 # The parser object
 desc = "Plots the gender using X and Y chromosomes' intensities"
 parser = argparse.ArgumentParser(description=desc)
@@ -783,6 +787,18 @@ group.add_argument("--summarized-intensities", type=str, metavar="FILE",
                          "summarized chr23 and chr24 intensities. Must be "
                          "specified if '--bfile' and '--intensities' are "
                          "not."))
+group.add_argument("--col-sampleID", type=str, metavar="STR",
+                   help=("The name of the column for Sample ID in intensities"
+                         "file"), default='Sample Name'
+                   )
+group.add_argument("--col-snpID", type=str, metavar="STR",
+                   help=("The name of the column for SNP ID in intensities"
+                         "file"), default='SNP Name'
+                   )
+group.add_argument("--col-chr", type=str, metavar="STR",
+                   help=("The name of the column for Chromosome in intensities"
+                         "file"), default='Chr'
+                   )
 group.add_argument("--sex-problems", type=str, metavar="FILE", required=True,
                    help=("The file containing individuals with sex "
                          "problems. This file is not read if the option "

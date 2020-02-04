@@ -110,7 +110,10 @@ def main(argString=None):
             logger.info("Creating the gender plot")
             createGenderPlot(args.bfile, args.sex_chr_intensities,
                              args.out + ".list_problem_sex",
-                             args.gender_plot_format, args.out)
+                             args.gender_plot_format, args.out,
+                             args.col_sampleID,
+                             args.col_snpID,
+                             args.col_chr)
 
         # If required, let's plot the LRR and BAF plot
         if args.lrr_baf:
@@ -125,7 +128,7 @@ def main(argString=None):
 
 
 def createGenderPlot(bfile, intensities, problematic_samples, format,
-                     out_prefix):
+                     out_prefix, col_sampleID, col_snpID, col_chr):
     """Creates the gender plot.
 
     :param bfile: the prefix of the input binary file.
@@ -133,12 +136,18 @@ def createGenderPlot(bfile, intensities, problematic_samples, format,
     :param problematic_samples: the file containing the problematic samples.
     :param format: the format of the output plot.
     :param out_prefix: the prefix of the output file.
+    :param col_sampleID: The SampleID column in intensity files
+    :param col_snpID: The snpID column in intensity files
+    :param col_chr: The chromosome column in intensity files
 
     :type bfile: str
     :type intensities: str
     :type problematic_samples: str
     :type format: str
     :type out_prefix: str
+    :type col_sampleID: str
+    :type col_snpID: str
+    :type col_chr: str
 
     Creates the gender plot of the samples using the
     :py:mod:`pyGenClean.SexCheck.gender_plot` module.
@@ -146,7 +155,11 @@ def createGenderPlot(bfile, intensities, problematic_samples, format,
     """
     gender_plot_options = ["--bfile", bfile, "--intensities", intensities,
                            "--sex-problems", problematic_samples, "--format",
-                           format, "--out", out_prefix]
+                           format, "--out", out_prefix,
+                           "--col-sampleID", col_sampleID,
+                           "--col-snpID", col_snpID,
+                           "--col-chr", col_chr
+                           ]
     try:
         gender_plot.main(gender_plot_options)
     except gender_plot.ProgramError as e:
@@ -675,6 +688,18 @@ group.add_argument("--gender-plot-format", type=str, metavar="FORMAT",
                    help=("The output file format for the gender plot (png, "
                          "ps, pdf, or X11 formats are available). "
                          "[default: %(default)s]"))
+group.add_argument("--col-sampleID", type=str, metavar="STR",
+                   help=("The name of the column for Sample ID in intensities"
+                         "file"), default='Sample Name'
+                   )
+group.add_argument("--col-snpID", type=str, metavar="STR",
+                   help=("The name of the column for SNP ID in intensities"
+                         "file"), default='SNP Name'
+                   )
+group.add_argument("--col-chr", type=str, metavar="STR",
+                   help=("The name of the column for Chromosome in intensities"
+                         "file"), default='Chr'
+                   )
 group = parser.add_argument_group("LRR and BAF Plot")
 group.add_argument("--lrr-baf", action="store_true",
                    help=("Create the LRR and BAF plot for problematic "
