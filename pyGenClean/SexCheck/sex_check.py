@@ -124,6 +124,7 @@ def main(argString=None):
                 format=args.lrr_baf_format,
                 dpi=args.lrr_baf_dpi,
                 out_prefix=args.out,
+                col_position=args.col_position
             )
 
 
@@ -167,7 +168,8 @@ def createGenderPlot(bfile, intensities, problematic_samples, format,
         raise ProgramError(msg)
 
 
-def createLrrBafPlot(raw_dir, problematic_samples, format, dpi, out_prefix):
+def createLrrBafPlot(raw_dir, problematic_samples, format, dpi, out_prefix,
+                     col_position):
     """Creates the LRR and BAF plot.
 
     :param raw_dir: the directory containing the intensities.
@@ -175,11 +177,13 @@ def createLrrBafPlot(raw_dir, problematic_samples, format, dpi, out_prefix):
     :param format: the format of the plot.
     :param dpi: the DPI of the resulting images.
     :param out_prefix: the prefix of the output file.
+    :param col_position: name of the position column
 
     :type raw_dir: str
     :type problematic_samples: str
     :type format: str
     :type out_prefix: str
+    :type col_position: str
 
     Creates the LRR (Log R Ratio) and BAF (B Allele Frequency) of the
     problematic samples using the :py:mod:`pyGenClean.SexCheck.baf_lrr_plot`
@@ -195,7 +199,8 @@ def createLrrBafPlot(raw_dir, problematic_samples, format, dpi, out_prefix):
     baf_lrr_plot_options = ["--problematic-samples", problematic_samples,
                             "--raw-dir", raw_dir, "--format", format,
                             "--dpi", str(dpi),
-                            "--out", os.path.join(dir_name, "baf_lrr")]
+                            "--out", os.path.join(dir_name, "baf_lrr"),
+                            "--col-position", col_position]
     try:
         baf_lrr_plot.main(baf_lrr_plot_options)
     except baf_lrr_plot.ProgramError as e:
@@ -715,6 +720,10 @@ group.add_argument("--lrr-baf-format", type=str, metavar="FORMAT",
 group.add_argument("--lrr-baf-dpi", type=int, metavar="DPI", default=300,
                    help=("The pixel density of the figure(s) (DPI). "
                          "[default: %(default)d]"))
+group.add_argument("--col-position", type=str, metavar="STR",
+                   help=("The name of the column for position in LRR BAF files"
+                         "file"), default='Position'
+                   )
 # The OUTPUT files
 group = parser.add_argument_group("Output File")
 group.add_argument("--out", type=str, metavar="FILE", default="sexcheck",

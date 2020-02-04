@@ -199,7 +199,7 @@ def plot_baf_lrr(file_names, options):
                 for i, col_name in
                 enumerate(input_file.readline().rstrip("\r\n").split("\t"))
             ])
-            for col_name in {"Chr", "Position", "B Allele Freq",
+            for col_name in {"Chr", options.col_position, "B Allele Freq",
                              "Log R Ratio"}:
                 if col_name not in header_index:
                     msg = "{}: no column named {}".format(file_name, col_name)
@@ -215,7 +215,7 @@ def plot_baf_lrr(file_names, options):
                     continue
 
                 # The position
-                position = row[header_index["Position"]]
+                position = row[header_index[options.col_position]]
                 try:
                     position = int(position)
                 except ValueError:
@@ -398,6 +398,7 @@ class ProgramError(Exception):
     def __str__(self):
         return self.message
 
+
 # The parser object
 desc = "Plots the BAF and LRR of problematic samples."
 parser = argparse.ArgumentParser(description=desc)
@@ -432,6 +433,10 @@ group.add_argument("--format", type=str, metavar="FORMAT", default="png",
 group.add_argument("--dpi", type=int, metavar="DPI", default=300,
                    help=("The pixel density of the figure(s) (DPI). "
                          "[default: %(default)d]"))
+group.add_argument("--col-position", type=str, metavar="STR",
+                   help=("The name of the column for position in LRR BAF files"
+                         "file"), default='Position'
+                   )
 # The OUTPUT files
 group = parser.add_argument_group("Output File")
 group.add_argument("--out", type=str, metavar="FILE",
