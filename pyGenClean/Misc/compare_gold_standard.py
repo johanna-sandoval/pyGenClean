@@ -15,7 +15,6 @@
 # pyGenClean.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import re
 import os
 import sys
 import gzip
@@ -23,6 +22,8 @@ import shutil
 import logging
 import argparse
 import subprocess
+from multiprocessing import Pool
+import traceback
 
 from .. import __version__
 from ..PlinkUtils import createRowFromPlinkSpacedOutput
@@ -68,7 +69,8 @@ def main(argString=None):
                 [args.out + ".gold_snp_to_extract",
                  args.out + ".source_snp_to_extract"],
                 [args.out + ".gold_standard", args.out + ".source_panel"],
-                args.sge)
+                args.sge,
+                args)
 
     gold_input_prefix = args.out + ".gold_standard"
     # Renaiming the reference file, so that the SNP names are the same
@@ -120,7 +122,7 @@ def main(argString=None):
         compute_statistics(args.out + ".duplicated_samples",
                            gold_input_prefix + ".cleaned.flipped",
                            args.out + ".source_panel.cleaned", same_samples,
-                           args.sge, args.out)
+                           args.sge, args.out, args)
     else:
         # We do not need to flip...
         # Splitting the files, and running the duplicated samples script
@@ -138,7 +140,7 @@ def main(argString=None):
         compute_statistics(args.out + ".duplicated_samples",
                            gold_input_prefix + ".cleaned",
                            args.out + ".source_panel.cleaned", same_samples,
-                           args.sge, args.out)
+                           args.sge, args.out, args)
 
 
 def read_source_manifest(file_name):
@@ -246,7 +248,7 @@ def illumina_to_snp(strand, snp):
 
 
 def compute_statistics(out_dir, gold_prefix, source_prefix, same_samples,
-                       use_sge, final_out_prefix):
+                       use_sge, final_out_prefix, options):
     """Compute the statistics."""
     # Now, creating a temporary directory
     if not os.path.isdir(out_dir):
@@ -286,6 +288,7 @@ def compute_statistics(out_dir, gold_prefix, source_prefix, same_samples,
         [out_prefix + "_{}_source".format(i) for i in range(nb)],
         use_sge,
         transpose=True,
+        options=options
     )
 
     # Creating reports
@@ -729,7 +732,34 @@ def findOverlappingSNPsWithGoldStandard(prefix, gold_prefixe, out_prefix,
     changeNameOutputFile.close()
 
 
-def extractSNPs(prefixes, snpToExtractFileNames, outPrefixes, runSGE):
+def run_command_wrapped(command):
+    """Run a command. Wrapper used to overcome an error:
+    TypeError: ('__init__() takes at least 3 arguments (1 given)',
+    <class 'subprocess.CalledProcessError'>, ())
+
+    :param command: the command to run.
+
+    :type command: list
+
+    Tries to run a command. If it fails, raise a :py:class:`ProgramError`. This
+    function uses the :py:mod:`subprocess` module.
+
+    .. warning::
+        The variable ``command`` should be a list of strings (no other type).
+
+    """
+    
+    try:
+        p = subprocess.call(command,
+                            stderr=subprocess.STDOUT,
+                            shell=False)
+        return True
+    except:
+        print('%s: %s' % (command, traceback.format_exc()))
+        return False
+
+
+def extractSNPs(prefixes, snpToExtractFileNames, outPrefixes, runSGE, options):
     """Extract a list of SNPs using Plink."""
     s = None
     jobIDs = []
@@ -749,12 +779,15 @@ def extractSNPs(prefixes, snpToExtractFileNames, outPrefixes, runSGE):
         # Initializing a session
         s = drmaa.Session()
         s.initialize()
+    elif options.parallel:
+        # Initialize workers
+        pool = Pool(processes=options.parallel_procs)
+        results = []
 
     for k, prefix in enumerate(prefixes):
         plinkCommand = ["plink", "--noweb", "--bfile", prefix, "--extract",
                         snpToExtractFileNames[k], "--make-bed", "--out",
                         outPrefixes[k]]
-
         if runSGE:
             # We run using SGE
             # Creating the job template
@@ -771,7 +804,11 @@ def extractSNPs(prefixes, snpToExtractFileNames, outPrefixes, runSGE):
             # Storing the job template and the job ID
             jobTemplates.append(jt)
             jobIDs.append(jobID)
-
+        elif options.parallel:
+            results.append(pool.apply_async(run_command_wrapped,
+                                            args=(plinkCommand,)
+                                            )
+                           )
         else:
             # We run normal
             runCommand(plinkCommand)
@@ -795,10 +832,23 @@ def extractSNPs(prefixes, snpToExtractFileNames, outPrefixes, runSGE):
             if not hadProblem:
                 msg = "Some SGE jobs had errors..."
                 raise ProgramError(msg)
+    elif options.parallel:
+        # Closing the session
+        pool.close()
+        # Waiting for the jobs to finish
+        pool.join()
+        # Report if had problems
+        had_problems = []
+        for result in results:
+            retVal = result.get()
+            had_problems.append(retVal is True)
+        # Checking for problems
+        if not all(had_problems):
+            raise ProgramError("Some parallel jobs had errors...")
 
 
 def keepSamples(prefixes, samplesToExtractFileNames, outPrefixes,
-                runSGE, transpose=False):
+                runSGE, options, transpose=False):
     """Extract a list of SNPs using Plink."""
     s = None
     jobIDs = []
@@ -815,7 +865,10 @@ def keepSamples(prefixes, samplesToExtractFileNames, outPrefixes,
         # Initializing a session
         s = drmaa.Session()
         s.initialize()
-
+    elif options.parallel:
+        # Initialize workers
+        pool = Pool(processes=options.parallel_procs)
+        results = []
     for k, prefix in enumerate(prefixes):
         plinkCommand = ["plink", "--noweb", "--bfile", prefix, "--keep",
                         samplesToExtractFileNames[k], "--out", outPrefixes[k]]
@@ -840,11 +893,15 @@ def keepSamples(prefixes, samplesToExtractFileNames, outPrefixes,
             # Storing the job template and the job ID
             jobTemplates.append(jt)
             jobIDs.append(jobID)
-
+        elif options.parallel:
+            results.append(pool.apply_async(run_command_wrapped,
+                                            args=(plinkCommand,)
+                                            )
+                           )
         else:
             # We run normal
             runCommand(plinkCommand)
-
+    # SGE or parallel mode
     if runSGE:
         # We wait for all the jobs to be over
         hadProblems = []
@@ -864,6 +921,19 @@ def keepSamples(prefixes, samplesToExtractFileNames, outPrefixes,
             if not hadProblem:
                 msg = "Some SGE jobs had errors..."
                 raise ProgramError(msg)
+    elif options.parallel:
+        # Closing the session
+        pool.close()
+        # Waiting for the jobs to finish
+        pool.join()
+        # Report if had problems
+        had_problems = []
+        for result in results:
+            retVal = result.get()
+            had_problems.append(retVal is True)
+        # Checking for problems
+        if not all(had_problems):
+            raise ProgramError("Some parallel jobs had errors...")
 
 
 def runCommand(command):
@@ -962,6 +1032,10 @@ def parseArgs(argString=None):  # pragma: no cover
                                    with the marker name, the other with the
                                    alleles (separated by space). No header.
     ``--sge``              boolean Use SGE for parallelization.
+    ``--parallel``         bool   Parallelization using multiprocessing.
+    ``--parallel-procs``   int    Number of procesors for parallelization
+    ``--out``                   string The prefix of the output files.
+
     ``--do-not-flip``      boolean Do not flip SNPs. WARNING: only use this
                                    option only if the Gold Standard was
                                    generated using the same chip (hence,
@@ -1056,6 +1130,11 @@ group.add_argument("--use-marker-names", action="store_true",
                          "WARNING: only use this options only if the Gold "
                          "Standard was generated using the same chip (hence, "
                          "they have the same marker names)."))
+# Multiprocess arguments
+group.add_argument("--parallel", action="store_true",
+                   help=("Use multiprocessing for parallelization."))
+group.add_argument("--parallel-procs", type=int, metavar="INT",
+                   help=("The number of processors to use."))
 # The OUTPUT files
 group = parser.add_argument_group("Output File")
 group.add_argument("--out", type=str, metavar="FILE",
