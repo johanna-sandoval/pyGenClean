@@ -581,7 +581,7 @@ def flipSNPs(inPrefix, outPrefix, flipFileName):
     in ``outPrefix``. The list of markers to be flipped is in ``flipFileName``.
 
     """
-    plinkCommand = ["plink", "--noweb", "--bfile", inPrefix, "--flip",
+    plinkCommand = ["plink1.9", "--noweb", "--bfile", inPrefix, "--flip",
                     flipFileName, "--make-bed", "--out", outPrefix]
     runCommand(plinkCommand)
 
@@ -602,7 +602,7 @@ def excludeSNPs(inPrefix, outPrefix, exclusionFileName):
     results in ``outPrefix``. The list of markers are in ``exclusionFileName``.
 
     """
-    plinkCommand = ["plink", "--noweb", "--bfile", inPrefix, "--exclude",
+    plinkCommand = ["plink1.9", "--noweb", "--bfile", inPrefix, "--exclude",
                     exclusionFileName, "--make-bed", "--out", outPrefix]
     runCommand(plinkCommand)
 
@@ -623,7 +623,7 @@ def renameSNPs(inPrefix, updateFileName, outPrefix):
     ``updateFileName``. It saves the results in ``outPrefix``.
 
     """
-    plinkCommand = ["plink", "--noweb", "--bfile", inPrefix, "--update-map",
+    plinkCommand = ["plink1.9", "--noweb", "--bfile", inPrefix, "--update-map",
                     updateFileName, "--update-name", "--make-bed", "--out",
                     outPrefix]
     runCommand(plinkCommand)
@@ -977,7 +977,7 @@ def extractSNPs(snpToExtractFileNames, referencePrefixes, popNames, outPrefix,
 
     zipped = izip(popNames, referencePrefixes, snpToExtractFileNames)
     for popName, refPrefix, snpToExtractFileName in zipped:
-        plinkCommand = ["plink", "--noweb", "--bfile", refPrefix, "--extract",
+        plinkCommand = ["plink1.9", "--noweb", "--bfile", refPrefix, "--extract",
                         snpToExtractFileName, "--make-bed", "--out",
                         outPrefix + "." + popName]
 

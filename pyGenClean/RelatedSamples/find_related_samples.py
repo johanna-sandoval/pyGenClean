@@ -767,7 +767,7 @@ def extractSNPs(snpsToExtract, options):
 
     """
     outPrefix = options.out + ".pruned_data"
-    plinkCommand = ["plink", "--noweb", "--bfile", options.bfile, "--extract",
+    plinkCommand = ["plink1.9", "--noweb", "--bfile", options.bfile, "--extract",
                     snpsToExtract, "--make-bed", "--out", outPrefix]
     runCommand(plinkCommand)
     return outPrefix
@@ -786,7 +786,7 @@ def selectSNPsAccordingToLD(options):
     # The plink command
     outPrefix = options.out + ".pruning_" + options.indep_pairwise[2]
     plinkCommand = [
-        "plink",
+        "plink1.9",
         "--noweb",
         "--bfile", options.bfile,
         "--maf", options.maf,
